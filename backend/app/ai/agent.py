@@ -12,7 +12,7 @@ from backend.app.analytics.indicators import (
     growth_series,
     percent_change,
     trend_label,
-    window,
+    window_months,
 )
 from backend.app.config.settings import SERIES_METADATA
 from backend.app.fred.client import FREDClient, period_key
@@ -24,6 +24,8 @@ from backend.app.visualization.charts import line_chart
 class QueryIntent:
     name: str
     years: int | None = None
+    months: int | None = None
+    window_label: str | None = None
 
 
 class EconomicAgent:
@@ -42,11 +44,19 @@ class EconomicAgent:
                 if intent.name == "gdp_latest":
                     result = self._gdp_latest(cleaned_query)
                 elif intent.name == "gdp_history":
-                    result = self._gdp_history(cleaned_query, intent.years or 10)
+                    result = self._gdp_history(
+                        cleaned_query,
+                        intent.months or (intent.years or 10) * 12,
+                        intent.window_label,
+                    )
                 elif intent.name == "cpi_latest":
                     result = self._cpi_latest(cleaned_query)
                 elif intent.name == "cpi_history":
-                    result = self._cpi_history(cleaned_query, intent.years or 5)
+                    result = self._cpi_history(
+                        cleaned_query,
+                        intent.months or (intent.years or 5) * 12,
+                        intent.window_label,
+                    )
                 elif intent.name in {"comparison", "comparison_chart"}:
                     result = self._comparison(cleaned_query, intent.name == "comparison_chart")
                 else:
@@ -119,26 +129,41 @@ class EconomicAgent:
             warnings=self._history_warning(series, 1),
         )
 
-    def _gdp_history(self, query: str, years: int) -> AnalysisResult:
+    def _gdp_history(self, query: str, months: int, window_label: str | None = None) -> AnalysisResult:
         series = self.client.get_series("GDP")
-        selected, enough_history = window(series, years)
+        requested_months = months
+        selected, enough_history = window_months(series, requested_months)
         first, latest = selected[0], selected[-1]
         change = percent_change(first.value, latest.value)
-        months = max(1, (period_key(latest.period)[0] - period_key(first.period)[0]) * 12 + period_key(latest.period)[1] - period_key(first.period)[1])
-        cagr = annualized_growth(first.value, latest.value, months / 12)
-        growth = growth_series(series, 4)
-        answer = (
-            f"Across the available {years}-year GDP window, the series moves from "
-            f"{format_billions(first.value)} in {first.period} to {format_billions(latest.value)} "
-            f"in {latest.period}, a total change of {format_percent(change)} and an annualized "
-            f"growth rate of {format_percent(cagr)}. The latest observations suggest GDP is "
-            f"{trend_label([item.value for item in selected])}."
-        )
-        warnings = self._history_warning(series, years)
+        observed_months = max(1, (period_key(latest.period)[0] - period_key(first.period)[0]) * 12 + period_key(latest.period)[1] - period_key(first.period)[1])
+        cagr = annualized_growth(first.value, latest.value, observed_months / 12)
+        requested_label = window_label or format_window_label(requested_months)
+        if enough_history:
+            answer = (
+                f"Across the requested {requested_label} GDP window, the series moves from "
+                f"{format_billions(first.value)} in {first.period} to {format_billions(latest.value)} "
+                f"in {latest.period}, a total change of {format_percent(change)} and an annualized "
+                f"growth rate of {format_percent(cagr)}. The latest observations suggest GDP is "
+                f"{trend_label([item.value for item in selected])}."
+            )
+            total_change = format_percent(change)
+            annualized = format_percent(cagr)
+        else:
+            answer = (
+                f"For the requested {requested_label} window ({requested_months // 3} quarterly periods), "
+                f"the grounded data contains {len(selected)} observations from {first.period} through "
+                f"{latest.period} ({observed_months} months). GDP moved from {format_billions(first.value)} "
+                f"to {format_billions(latest.value)}, a change of {format_percent(change)} with an "
+                f"annualized growth rate of {format_percent(cagr)}. This is the available grounded result; "
+                f"the saved snapshot does not include the full {requested_label} history."
+            )
+            total_change = format_percent(change)
+            annualized = format_percent(cagr)
+        warnings = self._history_warning(series, requested_months)
         if not enough_history:
             warnings.append(
                 f"Only {len(selected)} local/live observations cover {first.period} through {latest.period}; "
-                f"the connected data does not span the full requested {years} years."
+                f"the connected data does not span the full requested {requested_label}."
             )
         return AnalysisResult(
             query=query,
@@ -146,11 +171,11 @@ class EconomicAgent:
             answer=answer,
             metrics=[
                 Metric("Window", f"{first.period} → {latest.period}"),
-                Metric("Total change", format_percent(change)),
-                Metric("Annualized growth", format_percent(cagr)),
+                Metric("Total change", total_change, f"Available {format_window_label(observed_months)}; requested {requested_label}"),
+                Metric("Annualized growth", annualized, f"Available {format_window_label(observed_months)}; requested {requested_label}"),
             ],
             chart=line_chart(
-                f"U.S. GDP over the available {years}-year window",
+                f"U.S. GDP observations within requested {requested_label} window",
                 [{"name": "GDP level", "unit": series.unit, "values": points_from(selected)}],
                 series.unit,
             ),
@@ -184,25 +209,38 @@ class EconomicAgent:
             warnings=self._history_warning(series, 1),
         )
 
-    def _cpi_history(self, query: str, years: int) -> AnalysisResult:
+    def _cpi_history(self, query: str, months: int, window_label: str | None = None) -> AnalysisResult:
         series = self.client.get_series("CPILFESL")
-        selected, enough_history = window(series, years)
+        selected, enough_history = window_months(series, months)
         first, latest = selected[0], selected[-1]
         change = percent_change(first.value, latest.value)
         inflation_points = growth_series(series, 12)
         selected_periods = {item.period for item in selected}
         selected_inflation = [point for point in inflation_points if point["date"] in selected_periods]
-        answer = (
-            f"Over the available {years}-year Core CPI window, the index rose from "
-            f"{first.value:,.3f} in {first.period} to {latest.value:,.3f} in {latest.period}, "
-            f"a {format_percent(change)} change. The index trend is "
-            f"{trend_label([item.value for item in selected])}."
-        )
-        warnings = self._history_warning(series, years)
+        requested_label = window_label or format_window_label(months)
+        if enough_history:
+            answer = (
+                f"Over the requested {requested_label} Core CPI window, the index rose from "
+                f"{first.value:,.3f} in {first.period} to {latest.value:,.3f} in {latest.period}, "
+                f"a {format_percent(change)} change. The index trend is "
+                f"{trend_label([item.value for item in selected])}."
+            )
+            index_change = format_percent(change)
+        else:
+            observed_months = max(1, (period_key(latest.period)[0] - period_key(first.period)[0]) * 12 + period_key(latest.period)[1] - period_key(first.period)[1])
+            answer = (
+                f"For the requested {requested_label} window, the grounded data contains {len(selected)} "
+                f"observations from {first.period} through {latest.period} ({observed_months} months). "
+                f"Core CPI moved from {first.value:,.3f} to {latest.value:,.3f}, a change of "
+                f"{format_percent(change)}. This is the available grounded result; the saved snapshot "
+                f"does not include the full {requested_label} history."
+            )
+            index_change = format_percent(change)
+        warnings = self._history_warning(series, months)
         if not enough_history:
             warnings.append(
                 f"Only {len(selected)} local/live observations cover {first.period} through {latest.period}; "
-                f"the connected data does not span the full requested {years} years."
+                f"the connected data does not span the full requested {requested_label}."
             )
         return AnalysisResult(
             query=query,
@@ -210,11 +248,11 @@ class EconomicAgent:
             answer=answer,
             metrics=[
                 Metric("Window", f"{first.period} → {latest.period}"),
-                Metric("Index change", format_percent(change)),
+                Metric("Index change", index_change, f"Available data span; requested {requested_label}"),
                 Metric("Latest inflation", format_percent(inflation_points[-1]["value"] if inflation_points else None), "Year over year"),
             ],
             chart=line_chart(
-                f"Core CPI over the available {years}-year window",
+                f"Core CPI observations within requested {requested_label} window",
                 [{"name": "Core CPI index", "unit": series.unit, "values": points_from(selected)}],
                 series.unit,
             ),
@@ -273,8 +311,8 @@ class EconomicAgent:
         )
 
     def _summary(self, query: str) -> AnalysisResult:
-        gdp = self._gdp_history(query, 10)
-        cpi = self._cpi_history(query, 5)
+        gdp = self._gdp_history(query, 10 * 12, "10-year")
+        cpi = self._cpi_history(query, 5 * 12, "5-year")
         comparison = self._comparison(query, False)
         answer = (
             f"GDP is {gdp.answer} Core CPI is {cpi.answer} "
@@ -324,23 +362,66 @@ def classify_query(query: str) -> QueryIntent:
     if mentions_cpi:
         if any(token in normalized for token in ("latest", "current", "now", "reported")) and not any(token in normalized for token in ("past", "year", "change", "trend", "history")):
             return QueryIntent("cpi_latest")
-        return QueryIntent("cpi_history", extract_years(normalized, 5))
+        months, label = extract_time_window(normalized, 5 * 12, "5-year")
+        return QueryIntent("cpi_history", months=months, window_label=label)
     if mentions_gdp:
         if any(token in normalized for token in ("latest", "current", "now", "reported")) and not any(token in normalized for token in ("past", "year", "change", "trend", "history")):
             return QueryIntent("gdp_latest")
-        return QueryIntent("gdp_history", extract_years(normalized, 10))
+        months, label = extract_time_window(normalized, 10 * 12, "10-year")
+        return QueryIntent("gdp_history", months=months, window_label=label)
     return QueryIntent("summary")
 
 
-def extract_years(query: str, default: int) -> int:
-    digit_match = re.search(r"(\d+)\s*years?", query)
-    if digit_match:
-        return max(1, min(int(digit_match.group(1)), 50))
-    word_years = {"one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "ten": 10}
-    for word, years in word_years.items():
-        if f"{word} year" in query:
-            return years
-    return default
+def extract_time_window(query: str, default_months: int, default_label: str) -> tuple[int, str]:
+    """Extract an explicit month/year horizon without silently changing its meaning."""
+    word_numbers = {
+        "one": 1,
+        "two": 2,
+        "three": 3,
+        "four": 4,
+        "five": 5,
+        "six": 6,
+        "seven": 7,
+        "eight": 8,
+        "nine": 9,
+        "ten": 10,
+        "eleven": 11,
+        "twelve": 12,
+    }
+    number_words = "|".join(word_numbers)
+
+    digit_month_match = re.search(r"\b(\d+)\s*[- ]?months?\b", query)
+    if digit_month_match:
+        months = clamp_months(int(digit_month_match.group(1)))
+        return months, f"{months}-month"
+
+    word_month_match = re.search(rf"\b({number_words})\s*[- ]?months?\b", query)
+    if word_month_match:
+        months = clamp_months(word_numbers[word_month_match.group(1)])
+        return months, f"{months}-month"
+
+    digit_year_match = re.search(r"\b(\d+)\s*[- ]?years?\b", query)
+    if digit_year_match:
+        years = max(1, min(int(digit_year_match.group(1)), 50))
+        return years * 12, f"{years}-year"
+
+    word_year_match = re.search(rf"\b({number_words})\s*[- ]?years?\b", query)
+    if word_year_match:
+        years = word_numbers[word_year_match.group(1)]
+        return years * 12, f"{years}-year"
+
+    if re.search(r"\b(a|one)\s+decade\b", query):
+        return 120, "10-year"
+
+    return default_months, default_label
+
+
+def clamp_months(months: int) -> int:
+    return max(1, min(months, 50 * 12))
+
+
+def format_window_label(months: int) -> str:
+    return f"{months // 12}-year" if months % 12 == 0 else f"{months}-month"
 
 
 def points(series: Series) -> list[dict]:

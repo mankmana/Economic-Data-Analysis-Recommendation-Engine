@@ -17,6 +17,18 @@ class QueryClassificationTests(unittest.TestCase):
         self.assertEqual(classify_query("What is the relationship between GDP growth and Core CPI inflation?").name, "comparison")
         self.assertEqual(classify_query("Generate a visualization comparing GDP growth and Core CPI inflation over time.").name, "comparison_chart")
 
+    def test_month_based_history_preserves_exact_requested_window(self) -> None:
+        intent = classify_query("How has GDP changed in the last 24 months?")
+        self.assertEqual(intent.name, "gdp_history")
+        self.assertEqual(intent.months, 24)
+        self.assertEqual(intent.window_label, "24-month")
+
+    def test_year_based_history_converts_to_months(self) -> None:
+        intent = classify_query("How has Core CPI changed over the past five years?")
+        self.assertEqual(intent.name, "cpi_history")
+        self.assertEqual(intent.months, 60)
+        self.assertEqual(intent.window_label, "5-year")
+
 
 class EconomicAgentTests(unittest.TestCase):
     def test_unrelated_question_gets_default_grounded_response(self) -> None:
@@ -45,6 +57,16 @@ class EconomicAgentTests(unittest.TestCase):
         self.assertIn("2026-Q3", result.answer)
         self.assertTrue(result.chart["series"][0]["values"])
         self.assertTrue(any("saved local grounding" in warning for warning in result.warnings))
+
+    def test_gdp_history_does_not_replace_24_months_with_default_10_years(self) -> None:
+        result = local_agent().answer("How has GDP changed in the last 24 months?")
+        self.assertEqual(result.intent, "gdp_history")
+        self.assertIn("requested 24-month window (8 quarterly periods)", result.answer)
+        self.assertIn("available grounded result", result.answer)
+        self.assertNotIn("10-year GDP window", result.answer)
+        self.assertNotIn("I can't", result.answer)
+        self.assertEqual(result.metrics[1].value, "+5.87%")
+        self.assertIn("full requested 24-month", " ".join(result.warnings))
 
     def test_current_core_cpi_returns_inflation_warning_when_history_is_short(self) -> None:
         result = local_agent().answer("What is the current Core CPI inflation rate?")

@@ -16,11 +16,17 @@ def percent_change(start: float, end: float) -> float | None:
 
 
 def window(series: Series, years: int) -> tuple[list[Observation], bool]:
+    """Return a backward-compatible year-based window."""
+    return window_months(series, years * 12)
+
+
+def window_months(series: Series, months: int) -> tuple[list[Observation], bool]:
+    """Return observations within an exact month-based window."""
     observations = series.observations
     if not observations:
         return [], False
     latest = observations[-1]
-    target_months = years * 12
+    target_months = months
     selected = [
         observation
         for observation in observations
