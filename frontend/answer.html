@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Analysis · Signal Desk</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body class="answer-page">
+    <header class="topbar">
+      <a class="brand" href="/"><span class="brand-mark">S</span> SIGNAL DESK</a>
+      <div class="topbar-meta"><span class="status-dot"></span> FRED economic agent</div>
+    </header>
+    <main class="answer-shell">
+      <a class="back-link" href="/">← Ask another question</a>
+      <section class="question-strip">
+        <div class="card-kicker">YOUR QUESTION</div>
+        <h1 id="question-text">Loading your question…</h1>
+      </section>
+      <div id="loading-state" class="loading-state"><span class="loader"></span> Reading the connected data…</div>
+      <div id="error-state" class="error-state" hidden></div>
+      <section id="result-content" hidden>
+        <div class="result-grid">
+          <article class="answer-card">
+            <div class="card-kicker">AGENT RESPONSE</div>
+            <p id="answer-text" class="answer-text"></p>
+            <div id="warnings" class="warnings"></div>
+          </article>
+          <aside class="metrics-card">
+            <div class="card-kicker">AT A GLANCE</div>
+            <div id="metrics-list" class="metrics-list"></div>
+          </aside>
+        </div>
+        <section class="chart-card">
+          <div class="chart-heading">
+            <div>
+              <div class="card-kicker">VISUAL EVIDENCE</div>
+              <h2 id="chart-title">Chart</h2>
+            </div>
+            <div id="chart-legend" class="chart-legend"></div>
+          </div>
+          <div id="chart-wrap" class="chart-wrap"></div>
+        </section>
+        <section class="sources-card">
+          <div class="card-kicker">SOURCES &amp; METHOD</div>
+          <div id="sources-list" class="sources-list"></div>
+        </section>
+      </section>
+    </main>
+    <script src="/src/app.js"></script>
+  </body>
+</html>

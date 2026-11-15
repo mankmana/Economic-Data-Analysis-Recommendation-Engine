@@ -16,7 +16,7 @@ The initial dataset boundary is intentionally small and explicit:
 
 | Dataset | FRED series ID | Intended use |
 | --- | --- | --- |
-| Real Gross Domestic Product | `GDPC1` | GDP level and growth analysis |
+| Gross Domestic Product | `GDP` | GDP level and growth analysis |
 | Core CPI | `CPILFESL` | Core inflation level and trend analysis |
 
 ## Repository structure
@@ -37,6 +37,7 @@ The initial dataset boundary is intentionally small and explicit:
 │       ├── integration/        # API and external-boundary tests
 │       └── unit/               # Fast isolated tests
 ├── data/
+│   ├── grounding/              # Generated, provenance-preserving grounding artifacts
 │   ├── processed/              # Normalized/cacheable observations and derived data
 │   └── raw/                    # Downloaded source payloads (not committed)
 ├── docs/                       # Architecture, data dictionary, and API notes
@@ -68,4 +69,16 @@ Every generated answer should retain the FRED series IDs, observation dates, uni
 
 ## Development status
 
-This repository currently contains the empty project scaffold only. Implementation can be added by layer without changing the top-level boundaries.
+The first runnable application is now implemented with a dependency-free Python backend and web frontend. It supports the example GDP/Core CPI questions through a grounded deterministic analysis agent and can optionally retrieve the latest complete series directly from FRED's graph CSV endpoint.
+
+## Local grounding data
+
+Run `python scripts/build_grounding.py` after adding or replacing saved FRED HTML snapshots. The command creates normalized observations and searchable table chunks under `data/grounding/` while leaving the original source pages unchanged.
+
+## Run locally
+
+```bash
+python scripts/run_app.py
+```
+
+Open `http://127.0.0.1:8000`. Set `FRED_LIVE_DATA=false` to force answers to use only the saved local grounding files.

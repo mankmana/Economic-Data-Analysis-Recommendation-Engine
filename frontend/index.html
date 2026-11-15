@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Signal Desk · FRED Economic Agent</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body class="landing-page">
+    <main class="landing-shell">
+      <section class="hero-panel">
+        <div class="eyebrow"><span class="status-dot"></span> Grounded in FRED data</div>
+        <h1>Ask the economy<br /><em>what changed.</em></h1>
+        <p class="hero-copy">
+          Explore U.S. GDP and Core CPI with a conversational analysis agent that shows its work,
+          calculates indicators, and draws the trend.
+        </p>
+        <div class="dataset-pills">
+          <span><strong>GDP</strong> Quarterly output</span>
+          <span><strong>CPILFESL</strong> Core CPI</span>
+        </div>
+      </section>
+
+      <section class="query-card" aria-labelledby="query-heading">
+        <div class="card-kicker">ECONOMIC QUERY</div>
+        <h2 id="query-heading">What would you like to understand?</h2>
+        <form id="query-form">
+          <label class="sr-only" for="query-input">Ask an economic question</label>
+          <textarea id="query-input" rows="4" placeholder="e.g. How has GDP changed over the past 10 years?"></textarea>
+          <div class="query-footer">
+            <span class="hint">Ask about GDP, Core CPI, growth, inflation, trends, or relationships.</span>
+            <button class="primary-button" type="submit">Analyze <span aria-hidden="true">↗</span></button>
+          </div>
+        </form>
+        <div class="suggestions" aria-label="Suggested questions">
+          <button type="button" data-query="What is the latest reported U.S. GDP?">Latest GDP</button>
+          <button type="button" data-query="What is the current Core CPI inflation rate?">Current Core CPI</button>
+          <button type="button" data-query="Generate a visualization comparing GDP growth and Core CPI inflation over time.">Compare trends</button>
+          <button type="button" data-query="Summarize the key economic trends observed in both datasets.">Key trends</button>
+        </div>
+      </section>
+    </main>
+    <footer class="landing-footer">Signal Desk <span>·</span> GDP + Core CPI analysis</footer>
+    <script src="/src/app.js"></script>
+  </body>
+</html>
